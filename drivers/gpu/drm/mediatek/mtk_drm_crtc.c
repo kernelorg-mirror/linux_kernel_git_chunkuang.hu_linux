@@ -4,6 +4,7 @@
  */
 
 #include <linux/clk.h>
+#include <linux/dma-mapping.h>
 #include <linux/pm_runtime.h>
 #include <linux/soc/mediatek/mtk-cmdq.h>
 #include <linux/soc/mediatek/mtk-mmsys.h>
@@ -22,6 +23,8 @@
 #include "mtk_drm_ddp_comp.h"
 #include "mtk_drm_gem.h"
 #include "mtk_drm_plane.h"
+
+#define CMDQ_CMD_BUF_SIZE 4096
 
 /**
  * struct mtk_drm_crtc - MediaTek specific crtc structure.
@@ -49,6 +52,8 @@ struct mtk_drm_crtc {
 #if IS_REACHABLE(CONFIG_MTK_CMDQ)
 	struct cmdq_client		*cmdq_client;
 	u32				cmdq_event;
+	struct cmdq_pkt			cmdq_pkt;
+	u8				cmdq_cmd_buf[CMDQ_CMD_BUF_SIZE];
 #endif
 
 	struct device			*mmsys_dev;
@@ -235,12 +240,6 @@ struct mtk_ddp_comp *mtk_drm_ddp_comp_for_plane(struct drm_crtc *crtc,
 	return NULL;
 }
 
-#if IS_REACHABLE(CONFIG_MTK_CMDQ)
-static void ddp_cmdq_cb(struct cmdq_cb_data data)
-{
-	cmdq_pkt_destroy(data.data);
-}
-#endif
 
 static int mtk_crtc_ddp_hw_init(struct mtk_drm_crtc *mtk_crtc)
 {
@@ -442,9 +441,6 @@ static void mtk_crtc_ddp_config(struct drm_crtc *crtc,
 
 static void mtk_drm_crtc_hw_config(struct mtk_drm_crtc *mtk_crtc)
 {
-#if IS_REACHABLE(CONFIG_MTK_CMDQ)
-	struct cmdq_pkt *cmdq_handle;
-#endif
 	struct drm_crtc *crtc = &mtk_crtc->base;
 	struct mtk_drm_private *priv = crtc->dev->dev_private;
 	unsigned int pending_planes = 0, pending_async_planes = 0;
@@ -479,12 +475,12 @@ static void mtk_drm_crtc_hw_config(struct mtk_drm_crtc *mtk_crtc)
 #if IS_REACHABLE(CONFIG_MTK_CMDQ)
 	if (mtk_crtc->cmdq_client) {
 		mbox_flush(mtk_crtc->cmdq_client->chan, 2000);
-		cmdq_handle = cmdq_pkt_create(mtk_crtc->cmdq_client, PAGE_SIZE);
-		cmdq_pkt_clear_event(cmdq_handle, mtk_crtc->cmdq_event);
-		cmdq_pkt_wfe(cmdq_handle, mtk_crtc->cmdq_event);
-		mtk_crtc_ddp_config(crtc, cmdq_handle);
-		cmdq_pkt_finalize(cmdq_handle);
-		cmdq_pkt_flush_async(cmdq_handle, ddp_cmdq_cb, cmdq_handle);
+		mtk_crtc->cmdq_pkt.cmd_buf_size = 0;
+		cmdq_pkt_clear_event(&mtk_crtc->cmdq_pkt, mtk_crtc->cmdq_event);
+		cmdq_pkt_wfe(&mtk_crtc->cmdq_pkt, mtk_crtc->cmdq_event);
+		mtk_crtc_ddp_config(crtc, &mtk_crtc->cmdq_pkt);
+		cmdq_pkt_finalize(&mtk_crtc->cmdq_pkt);
+		cmdq_pkt_flush_async(&mtk_crtc->cmdq_pkt, NULL, &mtk_crtc->cmdq_pkt);
 	}
 #endif
 	mutex_unlock(&mtk_crtc->hw_lock);
@@ -838,6 +834,22 @@ int mtk_drm_crtc_create(struct drm_device *drm_dev,
 	if (ret)
 		dev_dbg(dev, "mtk_crtc %d failed to get mediatek,gce-events property\n",
 			drm_crtc_index(&mtk_crtc->base));
+
+	if (mtk_crtc->cmdq_client) {
+		mtk_crtc->cmdq_pkt.va_base = mtk_crtc->cmdq_cmd_buf;
+		mtk_crtc->cmdq_pkt.buf_size = CMDQ_CMD_BUF_SIZE;
+		mtk_crtc->cmdq_pkt.cl = mtk_crtc->cmdq_client;
+		mtk_crtc->cmdq_pkt.pa_base = dma_map_single(mtk_crtc->mmsys_dev,
+							    mtk_crtc->cmdq_pkt.va_base,
+							    mtk_crtc->cmdq_pkt.buf_size,
+							    DMA_TO_DEVICE);
+		if (dma_mapping_error(dev, mtk_crtc->cmdq_pkt.pa_base)) {
+			dev_err(mtk_crtc->mmsys_dev, "dma map failed, size=%u\n",
+				(u32)(u64)mtk_crtc->cmdq_pkt.buf_size);
+			cmdq_mbox_destroy(mtk_crtc->cmdq_client);
+			return -ENOMEM;
+		}
+	}
 #endif
 	return 0;
 }
