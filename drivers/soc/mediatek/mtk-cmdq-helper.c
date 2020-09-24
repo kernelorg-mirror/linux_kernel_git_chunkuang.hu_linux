@@ -65,41 +65,7 @@ int cmdq_dev_get_client_reg(struct device *dev,
 }
 EXPORT_SYMBOL(cmdq_dev_get_client_reg);
 
-struct cmdq_client *cmdq_mbox_create(struct device *dev, int index)
-{
-	struct cmdq_client *client;
-
-	client = kzalloc(sizeof(*client), GFP_KERNEL);
-	if (!client)
-		return (struct cmdq_client *)-ENOMEM;
-
-	client->client.dev = dev;
-	client->client.tx_block = false;
-	client->client.knows_txdone = true;
-	client->chan = mbox_request_channel(&client->client, index);
-
-	if (IS_ERR(client->chan)) {
-		long err;
-
-		dev_err(dev, "failed to request channel\n");
-		err = PTR_ERR(client->chan);
-		kfree(client);
-
-		return ERR_PTR(err);
-	}
-
-	return client;
-}
-EXPORT_SYMBOL(cmdq_mbox_create);
-
-void cmdq_mbox_destroy(struct cmdq_client *client)
-{
-	mbox_free_channel(client->chan);
-	kfree(client);
-}
-EXPORT_SYMBOL(cmdq_mbox_destroy);
-
-struct cmdq_pkt *cmdq_pkt_create(struct cmdq_client *client, size_t size)
+struct cmdq_pkt *cmdq_pkt_create(struct mbox_chan *chan, size_t size)
 {
 	struct cmdq_pkt *pkt;
 	struct device *dev;
@@ -114,9 +80,8 @@ struct cmdq_pkt *cmdq_pkt_create(struct cmdq_client *client, size_t size)
 		return ERR_PTR(-ENOMEM);
 	}
 	pkt->buf_size = size;
-	pkt->cl = (void *)client;
 
-	dev = client->chan->mbox->dev;
+	dev = chan->mbox->dev;
 	dma_addr = dma_map_single(dev, pkt->va_base, pkt->buf_size,
 				  DMA_TO_DEVICE);
 	if (dma_mapping_error(dev, dma_addr)) {
@@ -132,11 +97,9 @@ struct cmdq_pkt *cmdq_pkt_create(struct cmdq_client *client, size_t size)
 }
 EXPORT_SYMBOL(cmdq_pkt_create);
 
-void cmdq_pkt_destroy(struct cmdq_pkt *pkt)
+void cmdq_pkt_destroy(struct mbox_chan *chan, struct cmdq_pkt *pkt)
 {
-	struct cmdq_client *client = (struct cmdq_client *)pkt->cl;
-
-	dma_unmap_single(client->chan->mbox->dev, pkt->pa_base, pkt->buf_size,
+	dma_unmap_single(chan->mbox->dev, pkt->pa_base, pkt->buf_size,
 			 DMA_TO_DEVICE);
 	kfree(pkt->va_base);
 	kfree(pkt);
@@ -318,16 +281,15 @@ int cmdq_pkt_finalize(struct cmdq_pkt *pkt)
 }
 EXPORT_SYMBOL(cmdq_pkt_finalize);
 
-int cmdq_pkt_flush_async(struct cmdq_pkt *pkt)
+int cmdq_pkt_flush_async(struct mbox_chan *chan, struct cmdq_pkt *pkt)
 {
 	int err;
-	struct cmdq_client *client = (struct cmdq_client *)pkt->cl;
 
-	err = mbox_send_message(client->chan, pkt);
+	err = mbox_send_message(chan, pkt);
 	if (err < 0)
 		return err;
 	/* We can send next packet immediately, so just call txdone. */
-	mbox_client_txdone(client->chan, 0);
+	mbox_client_txdone(chan, 0);
 
 	return 0;
 }

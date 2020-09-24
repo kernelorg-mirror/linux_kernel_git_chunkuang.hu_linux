@@ -19,11 +19,6 @@ struct cmdq_client_reg {
 	u16 size;
 };
 
-struct cmdq_client {
-	struct mbox_client client;
-	struct mbox_chan *chan;
-};
-
 /**
  * cmdq_dev_get_client_reg() - parse cmdq client reg from the device
  *			       node of CMDQ client
@@ -40,34 +35,20 @@ int cmdq_dev_get_client_reg(struct device *dev,
 			    struct cmdq_client_reg *client_reg, int idx);
 
 /**
- * cmdq_mbox_create() - create CMDQ mailbox client and channel
- * @dev:	device of CMDQ mailbox client
- * @index:	index of CMDQ mailbox channel
- *
- * Return: CMDQ mailbox client pointer
- */
-struct cmdq_client *cmdq_mbox_create(struct device *dev, int index);
-
-/**
- * cmdq_mbox_destroy() - destroy CMDQ mailbox client and channel
- * @client:	the CMDQ mailbox client
- */
-void cmdq_mbox_destroy(struct cmdq_client *client);
-
-/**
  * cmdq_pkt_create() - create a CMDQ packet
- * @client:	the CMDQ mailbox client
+ * @chan:	the mailbox channel
  * @size:	required CMDQ buffer size
  *
  * Return: CMDQ packet pointer
  */
-struct cmdq_pkt *cmdq_pkt_create(struct cmdq_client *client, size_t size);
+struct cmdq_pkt *cmdq_pkt_create(struct mbox_chan *chan, size_t size);
 
 /**
  * cmdq_pkt_destroy() - destroy the CMDQ packet
+ * @chan:	the mailbox channel
  * @pkt:	the CMDQ packet
  */
-void cmdq_pkt_destroy(struct cmdq_pkt *pkt);
+void cmdq_pkt_destroy(struct mbox_chan *chan, struct cmdq_pkt *pkt);
 
 /**
  * cmdq_pkt_write() - append write command to the CMDQ packet
@@ -177,6 +158,7 @@ int cmdq_pkt_finalize(struct cmdq_pkt *pkt);
 /**
  * cmdq_pkt_flush_async() - trigger CMDQ to asynchronously execute the CMDQ
  *                          packet and call back at the end of done packet
+ * @chan:	the mailbox channel
  * @pkt:	the CMDQ packet
  *
  * Return: 0 for success; else the error code is returned
@@ -185,6 +167,6 @@ int cmdq_pkt_finalize(struct cmdq_pkt *pkt);
  * at the end of done packet. Note that this is an ASYNC function. When the
  * function returned, it may or may not be finished.
  */
-int cmdq_pkt_flush_async(struct cmdq_pkt *pkt);
+int cmdq_pkt_flush_async(struct mbox_chan *chan, struct cmdq_pkt *pkt);
 
 #endif	/* __MTK_CMDQ_H__ */
