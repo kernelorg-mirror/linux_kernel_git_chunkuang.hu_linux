@@ -4,10 +4,12 @@
  */
 
 #include <linux/clk.h>
+#include <linux/dma-mapping.h>
 #include <linux/pm_runtime.h>
 #include <linux/soc/mediatek/mtk-cmdq.h>
 #include <linux/soc/mediatek/mtk-mmsys.h>
 #include <linux/soc/mediatek/mtk-mutex.h>
+#include <linux/mailbox_controller.h>
 
 #include <asm/barrier.h>
 #include <soc/mediatek/smi.h>
@@ -221,9 +223,11 @@ struct mtk_ddp_comp *mtk_drm_ddp_comp_for_plane(struct drm_crtc *crtc,
 }
 
 #if IS_REACHABLE(CONFIG_MTK_CMDQ)
-static void ddp_cmdq_cb(struct cmdq_cb_data data)
+static void ddp_cmdq_cb(struct mbox_client *cl, void *mssg)
 {
-	cmdq_pkt_destroy(data.data);
+	struct cmdq_cb_data *data = mssg;
+
+	cmdq_pkt_destroy(data->pkt);
 }
 #endif
 
@@ -469,7 +473,11 @@ static void mtk_drm_crtc_hw_config(struct mtk_drm_crtc *mtk_crtc)
 		cmdq_pkt_wfe(cmdq_handle, mtk_crtc->cmdq_event, false);
 		mtk_crtc_ddp_config(crtc, cmdq_handle);
 		cmdq_pkt_finalize(cmdq_handle);
-		cmdq_pkt_flush_async(cmdq_handle, ddp_cmdq_cb, cmdq_handle);
+		dma_sync_single_for_device(mtk_crtc->cmdq_client->chan->mbox->dev,
+					   cmdq_handle->pa_base,
+					   cmdq_handle->cmd_buf_size,
+					   DMA_TO_DEVICE);
+		cmdq_pkt_flush_async(cmdq_handle);
 	}
 #endif
 	mutex_unlock(&mtk_crtc->hw_lock);
@@ -847,6 +855,8 @@ int mtk_drm_crtc_create(struct drm_device *drm_dev,
 			cmdq_mbox_destroy(mtk_crtc->cmdq_client);
 			mtk_crtc->cmdq_client = NULL;
 		}
+
+		mtk_crtc->cmdq_client->client.rx_callback = ddp_cmdq_cb;
 	}
 #endif
 	return 0;
