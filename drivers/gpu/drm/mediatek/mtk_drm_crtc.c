@@ -51,6 +51,7 @@ struct mtk_drm_crtc {
 
 #if IS_REACHABLE(CONFIG_MTK_CMDQ)
 	struct cmdq_client		*cmdq_client;
+	struct cmdq_pkt			*cmdq_handle;
 	u32				cmdq_event;
 #endif
 
@@ -223,7 +224,6 @@ struct mtk_ddp_comp *mtk_drm_ddp_comp_for_plane(struct drm_crtc *crtc,
 #if IS_REACHABLE(CONFIG_MTK_CMDQ)
 static void ddp_cmdq_cb(struct cmdq_cb_data data)
 {
-	cmdq_pkt_destroy(data.data);
 }
 #endif
 
@@ -427,9 +427,6 @@ static void mtk_crtc_ddp_config(struct drm_crtc *crtc,
 
 static void mtk_drm_crtc_hw_config(struct mtk_drm_crtc *mtk_crtc)
 {
-#if IS_REACHABLE(CONFIG_MTK_CMDQ)
-	struct cmdq_pkt *cmdq_handle;
-#endif
 	struct drm_crtc *crtc = &mtk_crtc->base;
 	struct mtk_drm_private *priv = crtc->dev->dev_private;
 	unsigned int pending_planes = 0, pending_async_planes = 0;
@@ -464,12 +461,12 @@ static void mtk_drm_crtc_hw_config(struct mtk_drm_crtc *mtk_crtc)
 #if IS_REACHABLE(CONFIG_MTK_CMDQ)
 	if (mtk_crtc->cmdq_client) {
 		mbox_flush(mtk_crtc->cmdq_client->chan, 2000);
-		cmdq_handle = cmdq_pkt_create(mtk_crtc->cmdq_client, PAGE_SIZE);
-		cmdq_pkt_clear_event(cmdq_handle, mtk_crtc->cmdq_event);
-		cmdq_pkt_wfe(cmdq_handle, mtk_crtc->cmdq_event, false);
-		mtk_crtc_ddp_config(crtc, cmdq_handle);
-		cmdq_pkt_finalize(cmdq_handle);
-		cmdq_pkt_flush_async(cmdq_handle, ddp_cmdq_cb, cmdq_handle);
+		mtk_crtc->cmdq_handle->cmd_buf_size = 0;
+		cmdq_pkt_clear_event(mtk_crtc->cmdq_handle, mtk_crtc->cmdq_event);
+		cmdq_pkt_wfe(mtk_crtc->cmdq_handle, mtk_crtc->cmdq_event, false);
+		mtk_crtc_ddp_config(crtc, mtk_crtc->cmdq_handle);
+		cmdq_pkt_finalize(mtk_crtc->cmdq_handle);
+		cmdq_pkt_flush_async(mtk_crtc->cmdq_handle, ddp_cmdq_cb, mtk_crtc);
 	}
 #endif
 	mutex_unlock(&mtk_crtc->hw_lock);
@@ -846,6 +843,9 @@ int mtk_drm_crtc_create(struct drm_device *drm_dev,
 				drm_crtc_index(&mtk_crtc->base));
 			cmdq_mbox_destroy(mtk_crtc->cmdq_client);
 			mtk_crtc->cmdq_client = NULL;
+		} else {
+			mtk_crtc->cmdq_handle = cmdq_pkt_create(mtk_crtc->cmdq_client,
+								PAGE_SIZE);
 		}
 	}
 #endif
