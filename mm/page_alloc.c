@@ -187,6 +187,13 @@ unsigned long totalreserve_pages __read_mostly;
 unsigned long totalcma_pages __read_mostly;
 
 int percpu_pagelist_high_fraction;
+
+#ifdef CONFIG_PAGECALLER
+static unsigned long pagecaller_start_pfn;
+static unsigned long pagecaller_end_pfn;
+static unsigned long *pagecaller;
+#endif
+
 gfp_t gfp_allowed_mask __read_mostly = GFP_BOOT_MASK;
 DEFINE_STATIC_KEY_MAYBE(CONFIG_INIT_ON_ALLOC_DEFAULT_ON, init_on_alloc);
 EXPORT_SYMBOL(init_on_alloc);
@@ -921,6 +928,36 @@ compaction_capture(struct capture_control *capc, struct page *page,
 	return false;
 }
 #endif /* CONFIG_COMPACTION */
+
+#ifdef CONFIG_PAGECALLER
+unsigned long pagecaller_get(unsigned long pfn)
+{
+	if (pfn < pagecaller_start_pfn)
+		return PAGECALLER_RESERVED;
+
+	if (pfn < pagecaller_end_pfn)
+		return pagecaller[pfn - pagecaller_start_pfn];
+
+	return PAGECALLER_RESERVED;
+}
+EXPORT_SYMBOL(pagecaller_get);
+
+void pagecaller_set(unsigned long start_pfn, unsigned long nr_pages, unsigned long caller)
+{
+	unsigned long end_pfn = start_pfn + nr_pages;
+	unsigned long pfn;
+
+	if (start_pfn < pagecaller_start_pfn)
+		start_pfn = start_pfn;
+
+	if (end_pfn > pagecaller_end_pfn)
+		end_pfn = pagecaller_end_pfn;
+
+	for (pfn = start_pfn; pfn < end_pfn; pfn++)
+		pagecaller[pfn - pagecaller_start_pfn] = caller;
+}
+EXPORT_SYMBOL(pagecaller_set);
+#endif
 
 /* Used for pages not on another list */
 static inline void add_to_free_list(struct page *page, struct zone *zone,
@@ -7741,6 +7778,14 @@ static void __init free_area_init_node(int nid)
 	calculate_node_totalpages(pgdat, start_pfn, end_pfn);
 
 	alloc_node_mem_map(pgdat);
+#ifdef CONFIG_PAGECALLER
+	if (nid == 0) {
+		pagecaller_start_pfn = start_pfn;
+		pagecaller_end_pfn = end_pfn;
+		pagecaller = (unsigned long *)memblock_alloc_node((end_pfn - start_pfn) * sizeof(unsigned long), PAGE_SIZE, nid);
+		pagecaller_set(0, end_pfn - start_pfn, PAGECALLER_RESERVED);
+	}
+#endif
 	pgdat_set_deferred_range(pgdat);
 
 	free_area_init_core(pgdat);

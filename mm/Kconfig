@@ -1132,4 +1132,9 @@ config PTE_MARKER_UFFD_WP
 
 source "mm/damon/Kconfig"
 
+config PAGECALLER
+	bool "Pagecaller memory profiler"
+	help
+	  Pagecaller memory profiler
+
 endmenu

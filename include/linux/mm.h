@@ -3442,4 +3442,12 @@ madvise_set_anon_name(struct mm_struct *mm, unsigned long start,
  */
 #define  ZAP_FLAG_DROP_MARKER        ((__force zap_flags_t) BIT(0))
 
+#ifdef CONFIG_PAGECALLER
+#define PAGECALLER_FREE		0UL
+#define PAGECALLER_RESERVED	-1UL
+
+unsigned long pagecaller_get(unsigned long pfn);
+void pagecaller_set(unsigned long start_pfn, unsigned long nr_pages, unsigned long caller);
+#endif
+
 #endif /* _LINUX_MM_H */
