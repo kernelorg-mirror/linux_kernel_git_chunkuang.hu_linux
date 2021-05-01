@@ -967,6 +967,9 @@ static inline void add_to_free_list(struct page *page, struct zone *zone,
 
 	list_add(&page->lru, &area->free_list[migratetype]);
 	area->nr_free++;
+#ifdef CONFIG_PAGECALLER
+	pagecaller_set(page_to_pfn(page), 1 << order, (unsigned long)__builtin_return_address(0));
+#endif
 }
 
 /* Used for pages not on another list */
@@ -977,6 +980,9 @@ static inline void add_to_free_list_tail(struct page *page, struct zone *zone,
 
 	list_add_tail(&page->lru, &area->free_list[migratetype]);
 	area->nr_free++;
+#ifdef CONFIG_PAGECALLER
+	pagecaller_set(page_to_pfn(page), 1 << order, (unsigned long)__builtin_return_address(0));
+#endif
 }
 
 /*
@@ -1003,6 +1009,9 @@ static inline void del_page_from_free_list(struct page *page, struct zone *zone,
 	__ClearPageBuddy(page);
 	set_page_private(page, 0);
 	zone->free_area[order].nr_free--;
+#ifdef CONFIG_PAGECALLER
+	pagecaller_set(page_to_pfn(page), 1 << order, PAGECALLER_FREE);
+#endif
 }
 
 /*
