@@ -23,6 +23,7 @@
 #include <linux/debugfs.h>
 #include <linux/sched.h>
 #include <linux/math64.h>
+#include <linux/memblock.h>
 #include <linux/writeback.h>
 #include <linux/compaction.h>
 #include <linux/mm_inline.h>
@@ -1486,6 +1487,91 @@ static int frag_show(struct seq_file *m, void *arg)
 	return 0;
 }
 
+#ifdef CONFIG_PAGECALLER
+#define PAGECALLER_MAX	65536
+static unsigned long pagecaller_nr;
+static unsigned long pagecaller[PAGECALLER_MAX];
+static unsigned long pagecaller_cnt[PAGECALLER_MAX];
+
+static void insert_pagecaller(unsigned long caller)
+{
+	unsigned long i;
+
+	for (i = 0; i < pagecaller_nr; i++)
+		if (pagecaller[i] == caller)
+			break;
+
+	if (i == pagecaller_nr) {
+		if (i < PAGECALLER_MAX) {
+			pagecaller[i] = caller;
+			pagecaller_cnt[i] = 1;
+			pagecaller_nr++;
+		}
+	} else {
+		pagecaller_cnt[i]++;
+	}
+}
+
+static void sort_pagecaller(void)
+{
+	unsigned long i, j, tmp;
+
+	for (i = 0; i < (pagecaller_nr - 1); i++)
+		for (j = i + 1; j < pagecaller_nr; j++)
+			if (pagecaller_cnt[i] > pagecaller[j]) {
+				tmp = pagecaller[i];
+				pagecaller[i] = pagecaller[j];
+				pagecaller[j] = tmp;
+
+				tmp = pagecaller_cnt[i];
+				pagecaller_cnt[i] = pagecaller_cnt[j];
+				pagecaller_cnt[j] = tmp;
+			}
+}
+
+static void dump_pagecaller(struct seq_file *m)
+{
+	unsigned long i;
+
+	seq_printf(m, "max_pfn = %lu\n", max_pfn);
+	seq_printf(m, "pagecaller_nr = %lu\n", pagecaller_nr);
+
+	for (i = 0; i < pagecaller_nr; i++)
+		if (pagecaller[i] == 0) {
+			seq_printf(m, "0x%016lx %16lu [Free memory]\n",
+				   pagecaller[i], pagecaller_cnt[i] * 4);
+		} else if (pagecaller[i] == 0xffffffffffffffff) {
+			seq_printf(m, "0x%016lx %16lu [Reserved memory]\n",
+				   pagecaller[i], pagecaller_cnt[i] * 4);
+		} else {
+#ifdef CONFIG_KALLSYMS
+			char symbol[KSYM_SYMBOL_LEN];
+			kallsyms_lookup(pagecaller[i], NULL, NULL, NULL, symbol);
+			seq_printf(m, "0x%016lx %16lu %s\n", pagecaller[i],
+				   pagecaller_cnt[i] * 4, symbol);
+#else
+			seq_printf(m, "0x%016lx %16lu\n", pagecaller[i],
+				   pagecaller_cnt[i] * 4);
+#endif
+		}
+}
+
+static int pagecaller_show(struct seq_file *m, void *arg)
+{
+	unsigned long pfn;
+
+	pagecaller_nr = 0;
+
+	for (pfn = 0; pfn < max_pfn; pfn++)
+		insert_pagecaller(pagecaller_get(pfn));
+
+	sort_pagecaller();
+	dump_pagecaller(m);
+
+	return 0;
+}
+#endif
+
 static void pagetypeinfo_showfree_print(struct seq_file *m,
 					pg_data_t *pgdat, struct zone *zone)
 {
@@ -1643,6 +1729,15 @@ static const struct seq_operations fragmentation_op = {
 	.stop	= frag_stop,
 	.show	= frag_show,
 };
+
+#ifdef CONFIG_PAGECALLER
+static const struct seq_operations pagecaller_op = {
+	.start  = frag_start,
+	.next   = frag_next,
+	.stop   = frag_stop,
+	.show   = pagecaller_show,
+};
+#endif
 
 static const struct seq_operations pagetypeinfo_op = {
 	.start	= frag_start,
@@ -2121,6 +2216,9 @@ void __init init_mm_internals(void)
 	migrate_on_reclaim_init();
 #ifdef CONFIG_PROC_FS
 	proc_create_seq("buddyinfo", 0444, NULL, &fragmentation_op);
+#ifdef CONFIG_PAGECALLER
+	proc_create_seq("pagecaller", 0444, NULL, &pagecaller_op);
+#endif
 	proc_create_seq("pagetypeinfo", 0400, NULL, &pagetypeinfo_op);
 	proc_create_seq("vmstat", 0444, NULL, &vmstat_op);
 	proc_create_seq("zoneinfo", 0444, NULL, &zoneinfo_op);
