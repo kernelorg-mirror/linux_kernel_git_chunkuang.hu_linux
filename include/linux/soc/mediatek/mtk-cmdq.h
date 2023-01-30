@@ -60,21 +60,6 @@ struct cmdq_client *cmdq_mbox_create(struct device *dev, int index);
 void cmdq_mbox_destroy(struct cmdq_client *client);
 
 /**
- * cmdq_pkt_create() - create a CMDQ packet
- * @client:	the CMDQ mailbox client
- * @size:	required CMDQ buffer size
- *
- * Return: CMDQ packet pointer
- */
-struct cmdq_pkt *cmdq_pkt_create(struct cmdq_client *client, size_t size);
-
-/**
- * cmdq_pkt_destroy() - destroy the CMDQ packet
- * @pkt:	the CMDQ packet
- */
-void cmdq_pkt_destroy(struct cmdq_pkt *pkt);
-
-/**
  * cmdq_pkt_write() - append write command to the CMDQ packet
  * @pkt:	the CMDQ packet
  * @subsys:	the CMDQ sub system code
@@ -266,19 +251,6 @@ int cmdq_pkt_jump(struct cmdq_pkt *pkt, dma_addr_t addr);
  */
 int cmdq_pkt_finalize(struct cmdq_pkt *pkt);
 
-/**
- * cmdq_pkt_flush_async() - trigger CMDQ to asynchronously execute the CMDQ
- *                          packet and call back at the end of done packet
- * @pkt:	the CMDQ packet
- *
- * Return: 0 for success; else the error code is returned
- *
- * Trigger CMDQ to asynchronously execute the CMDQ packet and call back
- * at the end of done packet. Note that this is an ASYNC function. When the
- * function returned, it may or may not be finished.
- */
-int cmdq_pkt_flush_async(struct cmdq_pkt *pkt);
-
 #else /* IS_ENABLED(CONFIG_MTK_CMDQ) */
 
 static inline int cmdq_dev_get_client_reg(struct device *dev,
@@ -293,13 +265,6 @@ static inline struct cmdq_client *cmdq_mbox_create(struct device *dev, int index
 }
 
 static inline void cmdq_mbox_destroy(struct cmdq_client *client) { }
-
-static inline  struct cmdq_pkt *cmdq_pkt_create(struct cmdq_client *client, size_t size)
-{
-	return ERR_PTR(-EINVAL);
-}
-
-static inline void cmdq_pkt_destroy(struct cmdq_pkt *pkt) { }
 
 static inline int cmdq_pkt_write(struct cmdq_pkt *pkt, u8 subsys, u16 offset, u32 value)
 {
@@ -380,11 +345,6 @@ static inline int cmdq_pkt_jump(struct cmdq_pkt *pkt, dma_addr_t addr)
 }
 
 static inline int cmdq_pkt_finalize(struct cmdq_pkt *pkt)
-{
-	return -EINVAL;
-}
-
-static inline int cmdq_pkt_flush_async(struct cmdq_pkt *pkt)
 {
 	return -EINVAL;
 }
