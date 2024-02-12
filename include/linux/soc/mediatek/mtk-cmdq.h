@@ -256,6 +256,17 @@ int cmdq_pkt_jump(struct cmdq_pkt *pkt, dma_addr_t addr, u8 shift_pa);
 int cmdq_pkt_eoc(struct cmdq_pkt *pkt);
 
 /**
+ * cmdq_pkt_nop() - Append nop command to the CMDQ packet, ask GCE
+ *		    to do no operation.
+ * @pkt:	the CMDQ packet
+ * @shift_pa:	shift bits of physical address in CMDQ instruction. This value
+ *		is got by cmdq_get_shift_pa().
+ *
+ * Return: 0 for success; else the error code is returned
+ */
+int cmdq_pkt_nop(struct cmdq_pkt *pkt, u8 shift_pa);
+
+/**
  * cmdq_pkt_finalize() - Append EOC and jump command to pkt.
  * @pkt:	the CMDQ packet
  *
@@ -357,6 +368,11 @@ static inline int cmdq_pkt_jump(struct cmdq_pkt *pkt, dma_addr_t addr, u8 shift_
 }
 
 static inline int cmdq_pkt_eoc(struct cmdq_pkt *pkt)
+{
+	return -EINVAL;
+}
+
+static inline int cmdq_pkt_nop(struct cmdq_pkt *pkt, u8 shift_pa)
 {
 	return -EINVAL;
 }

@@ -369,6 +369,17 @@ int cmdq_pkt_eoc(struct cmdq_pkt *pkt)
 }
 EXPORT_SYMBOL(cmdq_pkt_eoc);
 
+int cmdq_pkt_nop(struct cmdq_pkt *pkt, u8 shift_pa)
+{
+	struct cmdq_instruction inst = { {0} };
+
+	/* Jumping to next instruction is equal to no operation */
+	inst.op = CMDQ_CODE_JUMP;
+	inst.value = CMDQ_INST_SIZE >> shift_pa;
+	return cmdq_pkt_append_command(pkt, inst);
+}
+EXPORT_SYMBOL(cmdq_pkt_nop);
+
 int cmdq_pkt_finalize(struct cmdq_pkt *pkt)
 {
 	struct cmdq_instruction inst = { {0} };
