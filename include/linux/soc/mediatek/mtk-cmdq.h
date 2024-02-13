@@ -266,14 +266,6 @@ int cmdq_pkt_eoc(struct cmdq_pkt *pkt);
  */
 int cmdq_pkt_nop(struct cmdq_pkt *pkt, u8 shift_pa);
 
-/**
- * cmdq_pkt_finalize() - Append EOC and jump command to pkt.
- * @pkt:	the CMDQ packet
- *
- * Return: 0 for success; else the error code is returned
- */
-int cmdq_pkt_finalize(struct cmdq_pkt *pkt);
-
 #else /* IS_ENABLED(CONFIG_MTK_CMDQ) */
 
 static inline int cmdq_dev_get_client_reg(struct device *dev,
@@ -373,11 +365,6 @@ static inline int cmdq_pkt_eoc(struct cmdq_pkt *pkt)
 }
 
 static inline int cmdq_pkt_nop(struct cmdq_pkt *pkt, u8 shift_pa)
-{
-	return -EINVAL;
-}
-
-static inline int cmdq_pkt_finalize(struct cmdq_pkt *pkt)
 {
 	return -EINVAL;
 }
