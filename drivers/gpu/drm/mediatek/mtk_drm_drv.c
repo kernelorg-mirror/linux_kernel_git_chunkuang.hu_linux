@@ -153,12 +153,6 @@ static const unsigned int mt8183_mtk_ddp_main[] = {
 	DDP_COMPONENT_DSI0,
 };
 
-static const unsigned int mt8183_mtk_ddp_ext[] = {
-	DDP_COMPONENT_OVL_2L1,
-	DDP_COMPONENT_RDMA1,
-	DDP_COMPONENT_DPI0,
-};
-
 static const unsigned int mt8186_mtk_ddp_main[] = {
 	DDP_COMPONENT_OVL0,
 	DDP_COMPONENT_RDMA0,
@@ -276,8 +270,6 @@ static const struct mtk_mmsys_driver_data mt8173_mmsys_driver_data = {
 static const struct mtk_mmsys_driver_data mt8183_mmsys_driver_data = {
 	.main_path = mt8183_mtk_ddp_main,
 	.main_len = ARRAY_SIZE(mt8183_mtk_ddp_main),
-	.ext_path = mt8183_mtk_ddp_ext,
-	.ext_len = ARRAY_SIZE(mt8183_mtk_ddp_ext),
 	.mmsys_dev_num = 1,
 };
 
