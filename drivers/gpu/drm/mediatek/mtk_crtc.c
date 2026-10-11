@@ -695,17 +695,11 @@ static void mtk_crtc_update_output(struct drm_crtc *crtc,
 	struct mtk_drm_private *priv;
 	unsigned int encoder_mask = crtc_state->encoder_mask;
 
-	if (!crtc_state->connectors_changed)
-		return;
-
 	if (!mtk_crtc->num_conn_routes)
 		return;
 
 	priv = mtk_crtc->mmsys_priv;
 	dev = priv->dev;
-
-	dev_dbg(dev, "connector change:%d, encoder mask:0x%x for crtc:%d\n",
-		crtc_state->connectors_changed, encoder_mask, crtc_index);
 
 	for (i = 0; i < mtk_crtc->num_conn_routes; i++) {
 		unsigned int comp_id = mtk_crtc->conn_routes[i].route_ddp;
